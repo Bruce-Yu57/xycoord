@@ -1,327 +1,380 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Target, Type, CheckCircle, XCircle, Trophy, Search, Trash2 } from 'lucide-react';
-
-const CoordinateGame = () => {
-  // 遊戲設定
-  const GRID_SIZE = 8; 
-  const TOTAL_QUESTIONS_TARGET = 10; 
-
-  // 狀態管理
-  const [mode, setMode] = useState('explore'); // 預設改為 'explore' (探究模式)
-  const [target, setTarget] = useState({ x: 0, y: 0 });
-  const [userGuess, setUserGuess] = useState(null); 
-  const [inputVal, setInputVal] = useState({ x: '', y: '' }); 
-  const [feedback, setFeedback] = useState({ type: 'neutral', msg: '請選擇模式開始' });
-  const [stats, setStats] = useState({ correctFirstTry: 0, totalAttempts: 0 });
-  const [hasAttemptedCurrent, setHasAttemptedCurrent] = useState(false); 
-  const [showAnswer, setShowAnswer] = useState(false);
-  
-  // 新增：探究模式的歷史紀錄點
-  const [explorePoints, setExplorePoints] = useState([]);
-
-  // 初始化題目
-  const generateTarget = () => {
-    let x = Math.floor(Math.random() * (GRID_SIZE * 2 + 1)) - GRID_SIZE;
-    let y = Math.floor(Math.random() * (GRID_SIZE * 2 + 1)) - GRID_SIZE;
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>七年級坐標平面探險</title>
     
-    if (x === target.x && y === target.y) {
-      x = x === GRID_SIZE ? x - 1 : x + 1;
-    }
-
-    setTarget({ x, y });
-    setUserGuess(null);
-    setInputVal({ x: '', y: '' });
-    setFeedback({ type: 'neutral', msg: mode === 'click' ? `請在圖上點出 (${x}, ${y})` : '請問紅點的坐標是多少？' });
-    setHasAttemptedCurrent(false);
-    setShowAnswer(false);
-  };
-
-  // 切換模式時重置
-  useEffect(() => {
-    resetGame();
-  }, [mode]);
-
-  const resetGame = () => {
-    setStats({ correctFirstTry: 0, totalAttempts: 0 });
-    setExplorePoints([]); // 清空探究點
+    <!-- 引入 Tailwind CSS (樣式庫) -->
+    <script src="https://cdn.tailwindcss.com"></script>
     
-    if (mode === 'explore') {
-        setFeedback({ type: 'neutral', msg: '試著在圖上隨意點擊，觀察座標數字的變化規律！' });
-    } else {
-        generateTarget();
-    }
-  };
-
-  // 處理 SVG 點擊
-  const handleSvgClick = (e) => {
-    // 模式判斷
-    if (mode === 'input' || (mode === 'click' && showAnswer)) return;
-
-    const svg = e.currentTarget;
-    const pt = svg.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
+    <!-- 引入 React 和 React DOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
-    
-    const clickedX = Math.round(svgP.x);
-    // iPad/SVG Y軸修正
-    const clickedY = Math.round(-svgP.y); 
+    <!-- 引入 Babel (讓瀏覽器看懂 JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    if (clickedX < -GRID_SIZE || clickedX > GRID_SIZE || clickedY < -GRID_SIZE || clickedY > GRID_SIZE) return;
+    <style>
+        /* 針對 iPad 防止雙擊縮放 */
+        body {
+            touch-action: manipulation;
+        }
+    </style>
+</head>
+<body class="bg-blue-50">
+    <div id="root"></div>
 
-    const newPoint = { x: clickedX, y: clickedY };
+    <script type="text/babel">
+        // 1. 從全域 React 物件取得 Hook
+        const { useState, useEffect } = React;
 
-    if (mode === 'explore') {
-        // 探究模式：加入點並保留歷史，不限數量
-        setExplorePoints(prev => [...prev, newPoint]);
-    } else {
-        // 遊戲模式：原有邏輯
-        setUserGuess(newPoint);
-        checkAnswer(newPoint);
-    }
-  };
-
-  const handleInputSubmit = (e) => {
-    e.preventDefault();
-    if (inputVal.x === '' || inputVal.y === '') {
-      setFeedback({ type: 'error', msg: '請輸入完整的 X 和 Y 座標' });
-      return;
-    }
-    const guess = { x: parseInt(inputVal.x), y: parseInt(inputVal.y) };
-    setUserGuess(guess);
-    checkAnswer(guess);
-  };
-
-  const checkAnswer = (guess) => {
-    const isCorrect = guess.x === target.x && guess.y === target.y;
-
-    if (isCorrect) {
-      setFeedback({ type: 'success', msg: '答對了！太棒了！' });
-      setShowAnswer(true);
-      
-      if (!hasAttemptedCurrent) {
-        setStats(prev => ({
-          ...prev,
-          correctFirstTry: prev.correctFirstTry + 1,
-          totalAttempts: prev.totalAttempts + 1
-        }));
-      }
-    } else {
-      setFeedback({ type: 'error', msg: '不對喔，再試試看！' });
-      if (!hasAttemptedCurrent) {
-        setStats(prev => ({
-          ...prev,
-          totalAttempts: prev.totalAttempts + 1
-        }));
-        setHasAttemptedCurrent(true);
-      }
-    }
-  };
-
-  const renderGridLines = () => {
-    const lines = [];
-    for (let i = -GRID_SIZE; i <= GRID_SIZE; i++) {
-      lines.push(
-        <line 
-          key={`v${i}`} 
-          x1={i} y1={-GRID_SIZE} 
-          x2={i} y2={GRID_SIZE} 
-          stroke={i === 0 ? "#000" : "#e5e7eb"} 
-          strokeWidth={i === 0 ? 0.3 : 0.1} 
-        />
-      );
-      lines.push(
-        <line 
-          key={`h${i}`} 
-          x1={-GRID_SIZE} y1={-i} 
-          x2={GRID_SIZE} y2={-i} 
-          stroke={i === 0 ? "#000" : "#e5e7eb"} 
-          strokeWidth={i === 0 ? 0.3 : 0.1} 
-        />
-      );
-      
-      if (i !== 0) {
-        lines.push(
-          <text key={`xt${i}`} x={i} y={0.8} fontSize="0.6" textAnchor="middle" fill="#6b7280">{i}</text>
+        // 2. 定義圖示組件 (替代 lucide-react)
+        const IconBase = ({ children, className }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={className}
+            >
+                {children}
+            </svg>
         );
-        lines.push(
-          <text key={`yt${i}`} x={0.4} y={-i + 0.2} fontSize="0.6" textAnchor="start" fill="#6b7280">{i}</text>
+
+        const RefreshCw = ({ className }) => (
+            <IconBase className={className}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></IconBase>
         );
-      }
-    }
-    lines.push(<text key="origin" x={-0.8} y={0.6} fontSize="0.6" fill="#6b7280">O</text>);
-    // 移除明確的 x, y 標籤，讓學生自己在探究模式中發現 (或是保留作為提示亦可，這裡保留作為常規標示)
-    lines.push(<text key="xlabel" x={GRID_SIZE - 0.5} y={-0.5} fontSize="0.8" fontWeight="bold" fill="black">x</text>);
-    lines.push(<text key="ylabel" x={0.5} y={-GRID_SIZE + 0.5} fontSize="0.8" fontWeight="bold" fill="black">y</text>);
+        const Target = ({ className }) => (
+            <IconBase className={className}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></IconBase>
+        );
+        const Type = ({ className }) => (
+            <IconBase className={className}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></IconBase>
+        );
+        const CheckCircle = ({ className }) => (
+            <IconBase className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconBase>
+        );
+        const XCircle = ({ className }) => (
+            <IconBase className={className}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></IconBase>
+        );
+        const Trophy = ({ className }) => (
+            <IconBase className={className}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></IconBase>
+        );
+        const Search = ({ className }) => (
+            <IconBase className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconBase>
+        );
+        const Trash2 = ({ className }) => (
+            <IconBase className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconBase>
+        );
 
-    return lines;
-  };
+        // 3. 主程式邏輯
+        const CoordinateGame = () => {
+            const GRID_SIZE = 8; 
+            const TOTAL_QUESTIONS_TARGET = 10; 
 
-  return (
-    <div className="min-h-screen bg-blue-50 p-4 font-sans flex flex-col items-center">
-      
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-4 mb-4">
-        <div className="flex justify-between items-center mb-4 border-b pb-2">
-          <h1 className="text-xl md:text-2xl font-bold text-blue-800 flex items-center gap-2">
-            <Target className="w-6 h-6" />
-            坐標平面探險
-          </h1>
-          <button 
-            onClick={resetGame}
-            className="flex items-center gap-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-full transition-colors"
-          >
-            {mode === 'explore' ? <Trash2 className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
-            {mode === 'explore' ? '清除畫面' : '重新開始'}
-          </button>
-        </div>
+            // 狀態管理
+            const [mode, setMode] = useState('explore'); 
+            const [target, setTarget] = useState({ x: 0, y: 0 });
+            const [userGuess, setUserGuess] = useState(null); 
+            const [inputVal, setInputVal] = useState({ x: '', y: '' }); 
+            const [feedback, setFeedback] = useState({ type: 'neutral', msg: '請選擇模式開始' });
+            const [stats, setStats] = useState({ correctFirstTry: 0, totalAttempts: 0 });
+            const [hasAttemptedCurrent, setHasAttemptedCurrent] = useState(false); 
+            const [showAnswer, setShowAnswer] = useState(false);
+            
+            // 探究模式的歷史紀錄點
+            const [explorePoints, setExplorePoints] = useState([]);
 
-        {mode !== 'explore' && (
-            <div className="flex justify-between items-center bg-blue-50 rounded-xl p-3">
-            <div className="flex items-center gap-2 text-blue-900 font-medium">
-                <Trophy className="w-5 h-5 text-yellow-500" />
-                <span>初次答對: <span className="text-2xl font-bold">{stats.correctFirstTry}</span> 題</span>
-            </div>
-            <div className="text-gray-500 text-sm">
-                總作答數: {stats.totalAttempts}
-            </div>
-            </div>
-        )}
-        
-        {/* 探究模式提示 */}
-        {mode === 'explore' && (
-            <div className="bg-yellow-50 text-yellow-800 p-3 rounded-xl text-sm border border-yellow-200">
-                <p className="font-bold flex items-center gap-2"><Search className="w-4 h-4"/> 探究任務：</p>
-                請根據學習單的指示，在下方圖形上點出位置，並記錄你看到的數字規律。
-            </div>
-        )}
-      </div>
+            const generateTarget = () => {
+                let x = Math.floor(Math.random() * (GRID_SIZE * 2 + 1)) - GRID_SIZE;
+                let y = Math.floor(Math.random() * (GRID_SIZE * 2 + 1)) - GRID_SIZE;
+                
+                if (x === target.x && y === target.y) {
+                    x = x === GRID_SIZE ? x - 1 : x + 1;
+                }
 
-      {/* 模式切換按鈕 */}
-      <div className="flex gap-2 mb-4 w-full max-w-2xl overflow-x-auto">
-        <button
-          onClick={() => setMode('explore')}
-          className={`flex-1 py-3 px-2 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-sm whitespace-nowrap ${
-            mode === 'explore' 
-              ? 'bg-yellow-500 text-white shadow-yellow-300 ring-2 ring-yellow-300' 
-              : 'bg-white text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          <Search className="w-5 h-5" />
-          自由探究
-        </button>
-        <button
-          onClick={() => setMode('click')}
-          className={`flex-1 py-3 px-2 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-sm whitespace-nowrap ${
-            mode === 'click' 
-              ? 'bg-blue-600 text-white shadow-blue-300 ring-2 ring-blue-300' 
-              : 'bg-white text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          <Target className="w-5 h-5" />
-          找座標點
-        </button>
-        <button
-          onClick={() => setMode('input')}
-          className={`flex-1 py-3 px-2 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-sm whitespace-nowrap ${
-            mode === 'input' 
-              ? 'bg-purple-600 text-white shadow-purple-300 ring-2 ring-purple-300' 
-              : 'bg-white text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          <Type className="w-5 h-5" />
-          輸入座標
-        </button>
-      </div>
+                setTarget({ x, y });
+                setUserGuess(null);
+                setInputVal({ x: '', y: '' });
+                setFeedback({ type: 'neutral', msg: mode === 'click' ? `請在圖上點出 (${x}, ${y})` : '請問紅點的坐標是多少？' });
+                setHasAttemptedCurrent(false);
+                setShowAnswer(false);
+            };
 
-      <div className={`w-full max-w-2xl p-4 rounded-xl text-center mb-4 text-lg font-bold shadow-sm transition-colors ${
-        feedback.type === 'success' ? 'bg-green-100 text-green-800' :
-        feedback.type === 'error' ? 'bg-red-100 text-red-800' :
-        'bg-white text-gray-800'
-      }`}>
-        {feedback.type === 'success' && <CheckCircle className="inline-block w-6 h-6 mr-2 -mt-1" />}
-        {feedback.type === 'error' && <XCircle className="inline-block w-6 h-6 mr-2 -mt-1" />}
-        
-        {/* 顯示回饋文字 */}
-        {showAnswer ? feedback.msg : (
-          mode === 'click' ? (
-            <span>請找出座標 <span className="text-3xl text-blue-600 font-mono mx-2">({target.x}, {target.y})</span></span>
-          ) : mode === 'input' ? (
-             <span>請觀察<span className="text-red-500">紅點</span>，並輸入座標</span>
-          ) : (
-             <span>點擊任意位置查看座標</span>
-          )
-        )}
-      </div>
+            const resetGame = () => {
+                setStats({ correctFirstTry: 0, totalAttempts: 0 });
+                setExplorePoints([]); 
+                
+                setUserGuess(null);
+                setShowAnswer(false);
+                setHasAttemptedCurrent(false);
+                setInputVal({ x: '', y: '' });
+                
+                if (mode === 'explore') {
+                    setFeedback({ type: 'neutral', msg: '試著在圖上隨意點擊，觀察座標數字的變化規律！' });
+                } else {
+                    generateTarget();
+                }
+            };
 
-      <div className="relative bg-white p-2 rounded-2xl shadow-xl border-4 border-white select-none w-full max-w-[500px] aspect-square">
-        <svg 
-          viewBox={`${-GRID_SIZE - 1} ${-GRID_SIZE - 1} ${(GRID_SIZE + 1) * 2} ${(GRID_SIZE + 1) * 2}`}
-          className="w-full h-full cursor-pointer touch-none"
-          onClick={handleSvgClick}
-        >
-          {renderGridLines()}
+            useEffect(() => {
+                resetGame();
+            }, [mode]);
 
-          {/* 遊戲模式的目標點 */}
-          {mode === 'input' && (
-            <circle cx={target.x} cy={-target.y} r="0.4" fill="#ef4444" stroke="white" strokeWidth="0.1" className="animate-pulse"/>
-          )}
+            const handleSvgClick = (e) => {
+                if (mode === 'input' || (mode === 'click' && showAnswer)) return;
 
-          {/* 遊戲模式的猜測點 */}
-          {mode === 'click' && userGuess && (
-            <g>
-              <circle 
-                cx={userGuess.x} cy={-userGuess.y} r="0.4" 
-                fill={userGuess.x === target.x && userGuess.y === target.y ? "#22c55e" : "#ef4444"} 
-                stroke="white" strokeWidth="0.1"
-              />
-              <text x={userGuess.x} y={-userGuess.y - 0.8} fontSize="0.8" textAnchor="middle" fill="black" className="font-bold bg-white" style={{textShadow: '0 0 4px white'}}>
-                ({userGuess.x}, {userGuess.y})
-              </text>
-            </g>
-          )}
+                const svg = e.currentTarget;
+                const pt = svg.createSVGPoint();
+                pt.x = e.clientX;
+                pt.y = e.clientY;
+                
+                const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+                
+                const clickedX = Math.round(svgP.x);
+                const clickedY = Math.round(-svgP.y); 
 
-          {/* 探究模式的點 (可以多個) */}
-          {mode === 'explore' && explorePoints.map((pt, idx) => (
-             <g key={idx}>
-                <circle cx={pt.x} cy={-pt.y} r="0.3" fill="#eab308" stroke="white" strokeWidth="0.05" />
-                <text x={pt.x} y={-pt.y - 0.6} fontSize="0.6" textAnchor="middle" fill="#854d0e" fontWeight="bold" style={{textShadow: '0 0 3px white'}}>
-                    ({pt.x}, {pt.y})
-                </text>
-             </g>
-          ))}
-        </svg>
-      </div>
+                if (clickedX < -GRID_SIZE || clickedX > GRID_SIZE || clickedY < -GRID_SIZE || clickedY > GRID_SIZE) return;
 
-      {mode === 'input' && !showAnswer && (
-        <div className="w-full max-w-2xl mt-4">
-          <form onSubmit={handleInputSubmit} className="bg-white p-4 rounded-xl shadow-md flex gap-4 items-center justify-center">
-             <div className="flex items-center gap-2">
-               <span className="text-xl font-bold font-mono">(</span>
-               <input type="number" inputMode="numeric" placeholder="x" className="w-16 h-12 text-center text-xl border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none" value={inputVal.x} onChange={(e) => setInputVal({...inputVal, x: e.target.value})} />
-               <span className="text-xl font-bold font-mono">,</span>
-               <input type="number" inputMode="numeric" placeholder="y" className="w-16 h-12 text-center text-xl border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none" value={inputVal.y} onChange={(e) => setInputVal({...inputVal, y: e.target.value})} />
-               <span className="text-xl font-bold font-mono">)</span>
-             </div>
-             <button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors">送出</button>
-          </form>
-        </div>
-      )}
+                const newPoint = { x: clickedX, y: clickedY };
 
-      {showAnswer && (
-          <div className="flex justify-center mt-6 w-full">
-            <button onClick={generateTarget} className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-all flex items-center gap-2 animate-bounce">
-              下一題 <span className="text-xl">➜</span>
-            </button>
-          </div>
-      )}
-      
-      <div className="mt-8 text-gray-400 text-xs text-center">
-        專為 iPad 與平板設計的探究式學習工具<br/>
-        切換「自由探究」模式配合學習單使用
-      </div>
-    </div>
-  );
-};
+                if (mode === 'explore') {
+                    setExplorePoints(prev => [...prev, newPoint]);
+                } else {
+                    setUserGuess(newPoint);
+                    checkAnswer(newPoint);
+                }
+            };
 
-export default CoordinateGame;
+            const handleInputSubmit = (e) => {
+                e.preventDefault();
+                if (inputVal.x === '' || inputVal.y === '') {
+                    setFeedback({ type: 'error', msg: '請輸入完整的 X 和 Y 座標' });
+                    return;
+                }
+                const guess = { x: parseInt(inputVal.x), y: parseInt(inputVal.y) };
+                setUserGuess(guess);
+                checkAnswer(guess);
+            };
+
+            const checkAnswer = (guess) => {
+                const isCorrect = guess.x === target.x && guess.y === target.y;
+
+                if (isCorrect) {
+                    setFeedback({ type: 'success', msg: '答對了！太棒了！' });
+                    setShowAnswer(true);
+                    
+                    if (!hasAttemptedCurrent) {
+                        setStats(prev => ({
+                        ...prev,
+                        correctFirstTry: prev.correctFirstTry + 1,
+                        totalAttempts: prev.totalAttempts + 1
+                        }));
+                    }
+                } else {
+                    setFeedback({ type: 'error', msg: '不對喔，再試試看！' });
+                    if (!hasAttemptedCurrent) {
+                        setStats(prev => ({
+                        ...prev,
+                        totalAttempts: prev.totalAttempts + 1
+                        }));
+                        setHasAttemptedCurrent(true);
+                    }
+                }
+            };
+
+            const renderGridLines = () => {
+                const lines = [];
+                for (let i = -GRID_SIZE; i <= GRID_SIZE; i++) {
+                    lines.push(
+                        <line key={`v${i}`} x1={i} y1={-GRID_SIZE} x2={i} y2={GRID_SIZE} stroke={i === 0 ? "#000" : "#e5e7eb"} strokeWidth={i === 0 ? 0.3 : 0.1} />
+                    );
+                    lines.push(
+                        <line key={`h${i}`} x1={-GRID_SIZE} y1={-i} x2={GRID_SIZE} y2={-i} stroke={i === 0 ? "#000" : "#e5e7eb"} strokeWidth={i === 0 ? 0.3 : 0.1} />
+                    );
+                    
+                    if (i !== 0) {
+                        lines.push(
+                        <text key={`xt${i}`} x={i} y={0.8} fontSize="0.6" textAnchor="middle" fill="#6b7280">{i}</text>
+                        );
+                        lines.push(
+                        <text key={`yt${i}`} x={0.4} y={-i + 0.2} fontSize="0.6" textAnchor="start" fill="#6b7280">{i}</text>
+                        );
+                    }
+                }
+                lines.push(<text key="origin" x={-0.8} y={0.6} fontSize="0.6" fill="#6b7280">O</text>);
+                lines.push(<text key="xlabel" x={GRID_SIZE - 0.5} y={-0.5} fontSize="0.8" fontWeight="bold" fill="black">x</text>);
+                lines.push(<text key="ylabel" x={0.5} y={-GRID_SIZE + 0.5} fontSize="0.8" fontWeight="bold" fill="black">y</text>);
+
+                return lines;
+            };
+
+            return (
+                <div className="min-h-screen p-4 font-sans flex flex-col items-center">
+                    
+                    <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-4 mb-4">
+                        <div className="flex justify-between items-center mb-4 border-b pb-2">
+                            <h1 className="text-xl md:text-2xl font-bold text-blue-800 flex items-center gap-2">
+                                <Target className="w-6 h-6" />
+                                坐標平面探險
+                            </h1>
+                            <button 
+                                onClick={resetGame}
+                                className="flex items-center gap-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-full transition-colors"
+                            >
+                                {mode === 'explore' ? <Trash2 className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
+                                {mode === 'explore' ? '清除畫面' : '重新開始'}
+                            </button>
+                        </div>
+
+                        {mode !== 'explore' && (
+                            <div className="flex justify-between items-center bg-blue-50 rounded-xl p-3">
+                                <div className="flex items-center gap-2 text-blue-900 font-medium">
+                                    <Trophy className="w-5 h-5 text-yellow-500" />
+                                    <span>初次答對: <span className="text-2xl font-bold">{stats.correctFirstTry}</span> 題</span>
+                                </div>
+                                <div className="text-gray-500 text-sm">
+                                    總作答數: {stats.totalAttempts}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {mode === 'explore' && (
+                            <div className="bg-yellow-50 text-yellow-800 p-3 rounded-xl text-sm border border-yellow-200">
+                                <p className="font-bold flex items-center gap-2"><Search className="w-4 h-4"/> 探究任務：</p>
+                                請根據學習單的指示，在下方圖形上點出位置，並記錄你看到的數字規律。
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 模式切換按鈕 */}
+                    <div className="flex gap-2 mb-4 w-full max-w-2xl overflow-x-auto">
+                        <button
+                            onClick={() => setMode('explore')}
+                            className={`flex-1 py-3 px-2 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-sm whitespace-nowrap ${
+                                mode === 'explore' 
+                                ? 'bg-yellow-500 text-white shadow-yellow-300 ring-2 ring-yellow-300' 
+                                : 'bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Search className="w-5 h-5" />
+                            自由探究
+                        </button>
+                        <button
+                            onClick={() => setMode('click')}
+                            className={`flex-1 py-3 px-2 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-sm whitespace-nowrap ${
+                                mode === 'click' 
+                                ? 'bg-blue-600 text-white shadow-blue-300 ring-2 ring-blue-300' 
+                                : 'bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Target className="w-5 h-5" />
+                            找座標點
+                        </button>
+                        <button
+                            onClick={() => setMode('input')}
+                            className={`flex-1 py-3 px-2 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-sm whitespace-nowrap ${
+                                mode === 'input' 
+                                ? 'bg-purple-600 text-white shadow-purple-300 ring-2 ring-purple-300' 
+                                : 'bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Type className="w-5 h-5" />
+                            輸入座標
+                        </button>
+                    </div>
+
+                    <div className={`w-full max-w-2xl p-4 rounded-xl text-center mb-4 text-lg font-bold shadow-sm transition-colors ${
+                        feedback.type === 'success' ? 'bg-green-100 text-green-800' :
+                        feedback.type === 'error' ? 'bg-red-100 text-red-800' :
+                        'bg-white text-gray-800'
+                    }`}>
+                        {feedback.type === 'success' && <CheckCircle className="inline-block w-6 h-6 mr-2 -mt-1" />}
+                        {feedback.type === 'error' && <XCircle className="inline-block w-6 h-6 mr-2 -mt-1" />}
+                        
+                        {showAnswer ? feedback.msg : (
+                        mode === 'click' ? (
+                            <span>請找出座標 <span className="text-3xl text-blue-600 font-mono mx-2">({target.x}, {target.y})</span></span>
+                        ) : mode === 'input' ? (
+                            <span>請觀察<span className="text-red-500">紅點</span>，並輸入座標</span>
+                        ) : (
+                            <span>點擊任意位置查看座標</span>
+                        )
+                        )}
+                    </div>
+
+                    <div className="relative bg-white p-2 rounded-2xl shadow-xl border-4 border-white select-none w-full max-w-[500px] aspect-square">
+                        <svg 
+                        viewBox={`${-GRID_SIZE - 1} ${-GRID_SIZE - 1} ${(GRID_SIZE + 1) * 2} ${(GRID_SIZE + 1) * 2}`}
+                        className="w-full h-full cursor-pointer touch-none"
+                        onClick={handleSvgClick}
+                        >
+                        {renderGridLines()}
+
+                        {mode === 'input' && (
+                            <circle cx={target.x} cy={-target.y} r="0.4" fill="#ef4444" stroke="white" strokeWidth="0.1" className="animate-pulse"/>
+                        )}
+
+                        {mode === 'click' && userGuess && (
+                            <g>
+                            <circle 
+                                cx={userGuess.x} cy={-userGuess.y} r="0.4" 
+                                fill={userGuess.x === target.x && userGuess.y === target.y ? "#22c55e" : "#ef4444"} 
+                                stroke="white" strokeWidth="0.1"
+                            />
+                            <text x={userGuess.x} y={-userGuess.y - 0.8} fontSize="0.8" textAnchor="middle" fill="black" className="font-bold bg-white" style={{textShadow: '0 0 4px white'}}>
+                                ({userGuess.x}, {userGuess.y})
+                            </text>
+                            </g>
+                        )}
+
+                        {mode === 'explore' && explorePoints.map((pt, idx) => (
+                            <g key={idx}>
+                                <circle cx={pt.x} cy={-pt.y} r="0.3" fill="#eab308" stroke="white" strokeWidth="0.05" />
+                                <text x={pt.x} y={-pt.y - 0.6} fontSize="0.6" textAnchor="middle" fill="#854d0e" fontWeight="bold" style={{textShadow: '0 0 3px white'}}>
+                                    ({pt.x}, {pt.y})
+                                </text>
+                            </g>
+                        ))}
+                        </svg>
+                    </div>
+
+                    {mode === 'input' && !showAnswer && (
+                        <div className="w-full max-w-2xl mt-4">
+                        <form onSubmit={handleInputSubmit} className="bg-white p-4 rounded-xl shadow-md flex gap-4 items-center justify-center">
+                            <div className="flex items-center gap-2">
+                            <span className="text-xl font-bold font-mono">(</span>
+                            <input type="number" inputMode="numeric" placeholder="x" className="w-16 h-12 text-center text-xl border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none" value={inputVal.x} onChange={(e) => setInputVal({...inputVal, x: e.target.value})} />
+                            <span className="text-xl font-bold font-mono">,</span>
+                            <input type="number" inputMode="numeric" placeholder="y" className="w-16 h-12 text-center text-xl border-2 border-gray-300 rounded-lg focus:border-purple-500 outline-none" value={inputVal.y} onChange={(e) => setInputVal({...inputVal, y: e.target.value})} />
+                            <span className="text-xl font-bold font-mono">)</span>
+                            </div>
+                            <button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors">送出</button>
+                        </form>
+                        </div>
+                    )}
+
+                    {showAnswer && (
+                        <div className="flex justify-center mt-6 w-full">
+                            <button onClick={generateTarget} className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-all flex items-center gap-2 animate-bounce">
+                            下一題 <span className="text-xl">➜</span>
+                            </button>
+                        </div>
+                    )}
+                    
+                    <div className="mt-8 text-gray-400 text-xs text-center">
+                        專為 iPad 與平板設計的探究式學習工具<br/>
+                        切換「自由探究」模式配合學習單使用
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<CoordinateGame />);
+    </script>
+</body>
+</html>
